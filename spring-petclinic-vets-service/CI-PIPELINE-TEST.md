@@ -15,4 +15,4 @@ Expected pipeline effect:
 
 Safe to delete once the pipeline is verified working.
 
-<!-- trigger: 2026-08-30 (run 3 — after dropping the AWS_ACCOUNT_ID/AWS_REGION secret dependency) -->
+<!-- trigger: 2026-08-30 (run 4 — trivy-action tag needs the v prefix: @v0.36.0) -->
