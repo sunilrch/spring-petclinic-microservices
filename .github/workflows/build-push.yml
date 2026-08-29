@@ -7,12 +7,13 @@
 #
 # No deploy steps here. No kubectl. No long-lived AWS keys (OIDC only).
 #
-# Required secrets (set in this repo's Settings -> Secrets and variables -> Actions):
-#   AWS_ROLE_ARN        - arn of petclinic-github-actions-role (terraform output github_actions_role_arn)
-#   AWS_ACCOUNT_ID      - 117227383260
-#   AWS_REGION          - eu-central-1
+# Required secrets (Settings -> Secrets and variables -> Actions -> Secrets):
+#   AWS_ROLE_ARN        - arn of petclinic-github-actions-role
+#                         (terraform -chdir=terraform/environments/dev output -raw github_actions_role_arn)
 #   PLATFORM_REPO_TOKEN - GitHub PAT with 'contents: write' on sunilrch/petclinic-platform
 #                         (created manually — the built-in GITHUB_TOKEN cannot dispatch cross-repo)
+# Region is fixed (eu-central-1); the account id is read from the ECR login
+# output — no AWS_ACCOUNT_ID / AWS_REGION secret needed.
 
 name: Build & Push
 
@@ -85,7 +86,8 @@ jobs:
     with:
       service: ${{ matrix.service }}
       sha: ${{ needs.changes.outputs.sha7 }}
-    secrets: inherit
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
 
   # ---------------------------------------------------------------------------
   # After every changed service is pushed: tell the platform repo.

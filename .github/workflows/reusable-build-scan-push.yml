@@ -4,8 +4,12 @@
 #
 # Lives directly in .github/workflows/ (prefixed `reusable-`), NOT in a
 # reusable/ subdirectory: GitHub Actions only loads workflow files that are
-# direct children of .github/workflows/, so a `uses: ./.github/workflows/
-# reusable/...` reference to a subdir is an invalid-workflow startup failure.
+# direct children of .github/workflows/, so `uses: ./.github/workflows/
+# reusable/...` on a subdir file is an invalid-workflow startup failure.
+#
+# Only secret needed: AWS_ROLE_ARN. The region is fixed project-wide
+# (eu-central-1) and the account id is read from the amazon-ecr-login output,
+# so no AWS_ACCOUNT_ID / AWS_REGION secrets or variables are required.
 #
 # A standalone reusable "ecr-login" workflow is not used: a called workflow
 # runs as its own job, so a Docker login there would not carry into the
@@ -27,12 +31,13 @@ on:
         description: "7-character commit SHA to tag the image with"
         required: true
         type: string
+      aws_region:
+        description: "AWS region of the ECR registry"
+        required: false
+        type: string
+        default: eu-central-1
     secrets:
       AWS_ROLE_ARN:
-        required: true
-      AWS_ACCOUNT_ID:
-        required: true
-      AWS_REGION:
         required: true
 
 permissions:
@@ -44,7 +49,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MODULE: spring-petclinic-${{ inputs.service }}
-      IMAGE: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/petclinic-dev/${{ inputs.service }}:${{ inputs.sha }}
     steps:
       - uses: actions/checkout@v4
 
@@ -55,7 +59,7 @@ jobs:
           distribution: temurin
           cache: maven
 
-      - name: Build JAR — ${{ env.MODULE }}
+      - name: Build JAR (${{ env.MODULE }})
         run: mvn -q -B -pl "${MODULE}" -am package -DskipTests
 
       - name: Resolve artifact name + exposed port
@@ -94,10 +98,14 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ inputs.aws_region }}
 
       - name: Log in to Amazon ECR
+        id: ecr
         uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Compose image reference
+        run: echo "IMAGE=${{ steps.ecr.outputs.registry }}/petclinic-dev/${{ inputs.service }}:${{ inputs.sha }}" >> "$GITHUB_ENV"
 
       - name: Build linux/arm64 image — load locally, DO NOT push yet
         run: |
