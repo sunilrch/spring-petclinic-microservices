@@ -1,0 +1,22 @@
+# Trivy allowlist for the build-push CI pipeline (PETPLAT-105).
+#
+# The CI gate fails the build on any CRITICAL vulnerability in a service image
+# BEFORE it is pushed to ECR. HIGH vulnerabilities are reported (artifact +
+# job warning) but never block.
+#
+# To accept a specific CVE (e.g. no fix available, not exploitable in our
+# usage), add its ID here — one per line — with a comment saying why and who
+# accepted it. Trivy reads this file automatically (and the workflow also
+# passes it explicitly via `trivyignores`).
+#
+# Format:
+#   CVE-2023-12345   # <reason> — accepted by <name>, <date>, re-review <date>
+#
+# Review the current findings any time with:
+#   docker buildx build --platform linux/arm64 --provenance=false \
+#     --build-arg ARTIFACT_NAME=<jar-name> --build-arg EXPOSED_PORT=<port> \
+#     -f docker/Dockerfile -t local/<service>:scan --load spring-petclinic-<service>/target
+#   trivy image --severity HIGH,CRITICAL local/<service>:scan
+#
+# --- accepted CVEs -----------------------------------------------------------
+# (none yet)

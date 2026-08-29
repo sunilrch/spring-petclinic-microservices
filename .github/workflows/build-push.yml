@@ -1,0 +1,109 @@
+# Build & Push  (PETPLAT-49 / PETPLAT-105 / PETPLAT-53)
+#
+# CI only — builds linux/arm64 images for the microservice directories that
+# changed on a push to main, Trivy-scans each (CRITICAL blocks the push),
+# pushes to ECR tagged with the 7-char commit SHA, then notifies the platform
+# repo so its update-image-tags workflow bumps helm-values/ and ArgoCD deploys.
+#
+# No deploy steps here. No kubectl. No long-lived AWS keys (OIDC only).
+#
+# Required secrets (set in this repo's Settings -> Secrets and variables -> Actions):
+#   AWS_ROLE_ARN        - arn of petclinic-github-actions-role (terraform output github_actions_role_arn)
+#   AWS_ACCOUNT_ID      - 117227383260
+#   AWS_REGION          - eu-central-1
+#   PLATFORM_REPO_TOKEN - GitHub PAT with 'contents: write' on sunilrch/petclinic-platform
+#                         (created manually — the built-in GITHUB_TOKEN cannot dispatch cross-repo)
+
+name: Build & Push
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: build-push-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PLATFORM_REPO: sunilrch/petclinic-platform
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Which of the 8 service directories changed on this push?
+  # ---------------------------------------------------------------------------
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.filter.outputs.changes }}      # JSON array, e.g. ["customers-service","vets-service"]
+      services_str: ${{ steps.strlist.outputs.list }}    # space-joined,  e.g. "customers-service vets-service"
+      sha7: ${{ steps.sha.outputs.sha7 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed service directories
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            config-server:     'spring-petclinic-config-server/**'
+            discovery-server:  'spring-petclinic-discovery-server/**'
+            api-gateway:       'spring-petclinic-api-gateway/**'
+            customers-service: 'spring-petclinic-customers-service/**'
+            visits-service:    'spring-petclinic-visits-service/**'
+            vets-service:      'spring-petclinic-vets-service/**'
+            genai-service:     'spring-petclinic-genai-service/**'
+            admin-server:      'spring-petclinic-admin-server/**'
+
+      - name: Space-joined service list (for the dispatch payload)
+        id: strlist
+        run: echo "list=$(echo '${{ steps.filter.outputs.changes }}' | jq -r 'join(" ")')" >> "$GITHUB_OUTPUT"
+
+      - name: 7-char commit SHA (image tag)
+        id: sha
+        run: echo "sha7=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
+  # One reusable build-scan-push run per changed service (matrix).
+  # Skipped entirely when nothing service-relevant changed.
+  # ---------------------------------------------------------------------------
+  build:
+    needs: changes
+    if: needs.changes.outputs.services != '[]'
+    permissions:
+      id-token: write     # OIDC federation to AWS
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.changes.outputs.services) }}
+    uses: ./.github/workflows/reusable/build-scan-push.yml
+    with:
+      service: ${{ matrix.service }}
+      sha: ${{ needs.changes.outputs.sha7 }}
+    secrets: inherit
+
+  # ---------------------------------------------------------------------------
+  # After every changed service is pushed: tell the platform repo.
+  # ---------------------------------------------------------------------------
+  dispatch:
+    needs: [changes, build]
+    # Only when every changed service built, scanned clean, and pushed.
+    if: ${{ needs.build.result == 'success' && needs.changes.outputs.services != '[]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fire repository_dispatch (app-image-built) at the platform repo
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.PLATFORM_REPO_TOKEN }}
+          repository: ${{ env.PLATFORM_REPO }}
+          event-type: app-image-built
+          client-payload: |
+            {
+              "sha": "${{ needs.changes.outputs.sha7 }}",
+              "services": "${{ needs.changes.outputs.services_str }}"
+            }
