@@ -81,7 +81,7 @@ jobs:
       fail-fast: false
       matrix:
         service: ${{ fromJSON(needs.changes.outputs.services) }}
-    uses: ./.github/workflows/reusable/build-scan-push.yml
+    uses: ./.github/workflows/reusable-build-scan-push.yml
     with:
       service: ${{ matrix.service }}
       sha: ${{ needs.changes.outputs.sha7 }}

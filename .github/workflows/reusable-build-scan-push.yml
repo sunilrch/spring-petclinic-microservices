@@ -2,6 +2,11 @@
 # (PETPLAT-53 — the shared unit called once per changed service by the matrix
 # in build-push.yml. PETPLAT-105 — the CRITICAL scan gates the push.)
 #
+# Lives directly in .github/workflows/ (prefixed `reusable-`), NOT in a
+# reusable/ subdirectory: GitHub Actions only loads workflow files that are
+# direct children of .github/workflows/, so a `uses: ./.github/workflows/
+# reusable/...` reference to a subdir is an invalid-workflow startup failure.
+#
 # A standalone reusable "ecr-login" workflow is not used: a called workflow
 # runs as its own job, so a Docker login there would not carry into the
 # caller's job. ECR login therefore lives here, in the same job as the build

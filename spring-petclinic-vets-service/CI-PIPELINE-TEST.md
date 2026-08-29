@@ -15,4 +15,4 @@ Expected pipeline effect:
 
 Safe to delete once the pipeline is verified working.
 
-<!-- trigger: 2026-08-30 -->
+<!-- trigger: 2026-08-30 (run 2 — after fixing the reusable-workflow path) -->

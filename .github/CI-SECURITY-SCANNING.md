@@ -6,7 +6,7 @@ findings. (PETPLAT-105.)
 
 ## Where it runs
 
-`.github/workflows/reusable/build-scan-push.yml`, once per changed service:
+`.github/workflows/reusable-build-scan-push.yml`, once per changed service:
 
 ```
 build JAR → build linux/arm64 image (--load, NOT pushed)
